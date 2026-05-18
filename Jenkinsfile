@@ -14,26 +14,20 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                dir('testforge') {
-                    bat 'pip install -r requirements.txt'
-                }
+                bat 'pip install -r requirements.txt'
             }
         }
 
         stage('Run Tests') {
             steps {
-                dir('testforge') {
-                    bat 'pytest --alluredir=allure-results'
-                }
+                bat 'pytest --alluredir=allure-results'
             }
         }
     }
 
     post {
         always {
-            dir('testforge') {
-                allure includeProperties: false, jdk: '', results: [[path: 'allure-results']]
-            }
+            allure includeProperties: false, jdk: '', results: [[path: 'allure-results']]
         }
     }
 }
