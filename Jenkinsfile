@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout false
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
     environment {
         PYTHONIOENCODING = 'UTF-8'
     }
@@ -20,7 +25,9 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                bat 'pytest --alluredir=allure-results'
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    bat 'pytest --alluredir=allure-results'
+                }
             }
         }
     }
@@ -28,6 +35,15 @@ pipeline {
     post {
         always {
             allure includeProperties: false, jdk: '', results: [[path: 'allure-results']]
+        }
+        success {
+            echo '✅ All tests passed!'
+        }
+        unstable {
+            echo '⚠️ Some tests failed, please check the Allure report.'
+        }
+        failure {
+            echo '❌ Pipeline failed.'
         }
     }
 }

@@ -28,6 +28,10 @@ allure-results/
 allure-report/
 reports/
 
+# Logs
+logs/
+*.log
+
 # IDE
 .vscode/
 .idea/
