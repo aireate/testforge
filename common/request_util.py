@@ -6,12 +6,19 @@ class RequestUtil:
         self.base_url = base_url
         self.timeout = timeout
 
-    def get(self, url, **kwargs):
+    def _build_url(self, url):
         if self.base_url and not url.startswith("http"):
-            url = f"{self.base_url.rstrip('/')}/{url.lstrip('/')}"
-        return requests.get(url, timeout=self.timeout, **kwargs)
+            return f"{self.base_url.rstrip('/')}/{url.lstrip('/')}"
+        return url
+
+    def get(self, url, **kwargs):
+        return requests.get(self._build_url(url), timeout=self.timeout, **kwargs)
 
     def post(self, url, **kwargs):
-        if self.base_url and not url.startswith("http"):
-            url = f"{self.base_url.rstrip('/')}/{url.lstrip('/')}"
-        return requests.post(url, timeout=self.timeout, **kwargs)
+        return requests.post(self._build_url(url), timeout=self.timeout, **kwargs)
+
+    def put(self, url, **kwargs):
+        return requests.put(self._build_url(url), timeout=self.timeout, **kwargs)
+
+    def delete(self, url, **kwargs):
+        return requests.delete(self._build_url(url), timeout=self.timeout, **kwargs)
