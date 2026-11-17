@@ -17,6 +17,7 @@ class Settings:
     admin_password: str = "admin123"
     user_username: str = "user"
     user_password: str = "user123"
+    pay_secret: str = "testforge-pay-secret"
     db_path: Path | None = None
 
     @property
@@ -35,6 +36,7 @@ class Settings:
             admin_password=os.getenv("TESTFORGE_ADMIN_PASSWORD", cls.admin_password),
             user_username=os.getenv("TESTFORGE_USER_USER", cls.user_username),
             user_password=os.getenv("TESTFORGE_USER_PASSWORD", cls.user_password),
+            pay_secret=os.getenv("TESTFORGE_PAY_SECRET", cls.pay_secret),
             db_path=Path(db_path) if db_path else None,
         )
 
