@@ -1,3 +1,13 @@
-pytest
-requests
-allure-pytest
+# 被测系统 SUT
+fastapi>=0.115,<1.0
+uvicorn>=0.30
+SQLAlchemy>=2.0
+PyJWT>=2.9
+pydantic>=2.7
+
+# 测试框架
+requests>=2.32
+pytest>=8.0
+pytest-xdist>=3.6
+allure-pytest>=2.13
+playwright>=1.45

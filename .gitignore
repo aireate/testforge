@@ -32,6 +32,16 @@ reports/
 logs/
 *.log
 
+# SUT 本地数据库
+data/
+*.db
+*.db-journal
+*.sqlite3
+
+# Playwright
+traces/
+*.zip
+
 # IDE
 .vscode/
 .idea/
