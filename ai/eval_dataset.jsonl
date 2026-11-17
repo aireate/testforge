@@ -1,0 +1,60 @@
+{"id": "env-01", "message": "requests.exceptions.ConnectionError: HTTPConnectionPool(host='127.0.0.1', port=18080): Max retries exceeded with url: /healthz", "detail": "", "expected": "ENVIRONMENT", "note": "SUT 未启动"}
+{"id": "env-02", "message": "requests.exceptions.ConnectTimeout: HTTPConnectionPool(host='127.0.0.1', port=18080): connection timeout=3", "detail": "", "expected": "ENVIRONMENT", "note": "端口不可达"}
+{"id": "env-03", "message": "requests.exceptions.ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=18080): Read timed out. (read timeout=30)", "detail": "", "expected": "ENVIRONMENT", "note": "SUT 阻塞"}
+{"id": "env-04", "message": "socket.gaierror: [Errno 11001] getaddrinfo failed / Name or service not known", "detail": "", "expected": "ENVIRONMENT", "note": "域名解析失败"}
+{"id": "env-05", "message": "ConnectionRefusedError: [WinError 10061] 由于目标计算机积极拒绝，无法连接。", "detail": "", "expected": "ENVIRONMENT", "note": "服务未监听"}
+{"id": "env-06", "message": "ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。", "detail": "", "expected": "ENVIRONMENT", "note": "连接被重置"}
+{"id": "env-07", "message": "Health check timed out after 15s: http://127.0.0.1:18080/healthz", "detail": "", "expected": "ENVIRONMENT", "note": "启动探活超时"}
+{"id": "srv-01", "message": "AssertionError: assert 500 == 201", "detail": "E   assert 500 == 201\nE    +  where 500 = <Response [500]>.status_code\nE    +  Internal Server Error", "expected": "SERVER_ERROR", "note": "下单接口 500"}
+{"id": "srv-02", "message": "HTTP 502 Bad Gateway", "detail": "upstream connect error", "expected": "SERVER_ERROR", "note": "网关错误"}
+{"id": "srv-03", "message": "503 Service Unavailable", "detail": "service overloaded", "expected": "SERVER_ERROR", "note": "服务不可用"}
+{"id": "srv-04", "message": "requests.exceptions.HTTPError: 500 Server Error: Internal Server Error for url: /orders", "detail": "", "expected": "SERVER_ERROR", "note": "服务端异常"}
+{"id": "srv-05", "message": "AssertionError: assert 200 == 500", "detail": "E   assert 200 == 500", "expected": "SERVER_ERROR", "note": "预期 500，实际 200"}
+{"id": "srv-06", "message": "HTTP_503 from upstream", "detail": "", "expected": "SERVER_ERROR", "note": "上游 503"}
+{"id": "srv-07", "message": "Internal Server Error: /api/products", "detail": "Traceback (most recent call last):\nZeroDivisionError: division by zero", "expected": "SERVER_ERROR", "note": "商品接口异常"}
+{"id": "val-01", "message": "AssertionError: assert 422 == 201", "detail": "E   assert 422 == 201\nE   RequestValidationError: body.name field required", "expected": "VALIDATION", "note": "缺必填字段"}
+{"id": "val-02", "message": "fastapi.exceptions.RequestValidationError: 1 validation error for ProductCreate", "detail": "body.price_cents: Input should be greater than 0", "expected": "VALIDATION", "note": "参数范围错误"}
+{"id": "val-03", "message": "422 Unprocessable Entity", "detail": "{\"detail\":[{\"loc\":[\"body\",\"name\"],\"msg\":\"field required\"}]}", "expected": "VALIDATION", "note": "请求体校验失败"}
+{"id": "val-04", "message": "VALIDATION_ERROR: price_cents must be greater than 0", "detail": "", "expected": "VALIDATION", "note": "业务参数校验"}
+{"id": "val-05", "message": "AssertionError: assert 400 == 422", "detail": "E   assert 400 == 422", "expected": "VALIDATION", "note": "状态码不一致"}
+{"id": "val-06", "message": "ResponseValidationError: 2 validation errors for ProductOut", "detail": "stock: Input should be a valid integer", "expected": "VALIDATION", "note": "响应模型校验"}
+{"id": "auth-01", "message": "AssertionError: assert 401 == 200", "detail": "E   assert 401 == 200\nE   {'code': 'UNAUTHORIZED'}", "expected": "AUTHENTICATION", "note": "未登录访问"}
+{"id": "auth-02", "message": "401 Unauthorized", "detail": "", "expected": "AUTHENTICATION", "note": "缺少 Token"}
+{"id": "auth-03", "message": "TOKEN_EXPIRED: token has expired", "detail": "", "expected": "AUTHENTICATION", "note": "Token 过期"}
+{"id": "auth-04", "message": "TOKEN_INVALID: signature verification failed", "detail": "", "expected": "AUTHENTICATION", "note": "签名错误"}
+{"id": "auth-05", "message": "INVALID_CREDENTIALS: bad username or password", "detail": "", "expected": "AUTHENTICATION", "note": "账号密码错误"}
+{"id": "auth-06", "message": "AssertionError: assert 200 == 401", "detail": "E   assert 200 == 401", "expected": "AUTHENTICATION", "note": "登录态未生效"}
+{"id": "auth-07", "message": "Authentication failed: missing bearer token", "detail": "", "expected": "AUTHENTICATION", "note": "请求头缺少凭证"}
+{"id": "authz-01", "message": "AssertionError: assert 403 == 201", "detail": "E   assert 403 == 201\nE   {'code': 'FORBIDDEN'}", "expected": "AUTHORIZATION", "note": "普通用户建商品"}
+{"id": "authz-02", "message": "403 Forbidden", "detail": "", "expected": "AUTHORIZATION", "note": "角色不足"}
+{"id": "authz-03", "message": "FORBIDDEN: 需要管理员权限", "detail": "", "expected": "AUTHORIZATION", "note": "管理员接口越权"}
+{"id": "authz-04", "message": "AssertionError: assert 200 == 403", "detail": "E   assert 200 == 403", "expected": "AUTHORIZATION", "note": "越权访问成功"}
+{"id": "authz-05", "message": "User role 'user' is not allowed to access admin endpoint", "detail": "", "expected": "AUTHORIZATION", "note": "角色校验"}
+{"id": "authz-06", "message": "PermissionDenied: role user cannot create product", "detail": "", "expected": "AUTHORIZATION", "note": "权限拒绝"}
+{"id": "conf-01", "message": "AssertionError: assert 409 == 201", "detail": "E   {'code': 'OUT_OF_STOCK', 'message': '库存不足'}", "expected": "CONFLICT", "note": "超卖拦截"}
+{"id": "conf-02", "message": "409 Conflict: IDEMPOTENCY_CONFLICT", "detail": "", "expected": "CONFLICT", "note": "幂等键冲突"}
+{"id": "conf-03", "message": "ORDER_STATE_INVALID: 仅待处理订单可取消", "detail": "", "expected": "CONFLICT", "note": "订单状态机"}
+{"id": "conf-04", "message": "PRODUCT_IN_USE: 商品已被订单引用", "detail": "", "expected": "CONFLICT", "note": "删除被引用商品"}
+{"id": "conf-05", "message": "STOCK_NEGATIVE: 库存不能为负", "detail": "", "expected": "CONFLICT", "note": "库存扣减越界"}
+{"id": "conf-06", "message": "409 Client Error: Conflict for url: /orders", "detail": "", "expected": "CONFLICT", "note": "重复下单"}
+{"id": "conf-07", "message": "AssertionError: assert 201 == 409", "detail": "E   assert 201 == 409\nE   duplicate order created", "expected": "CONFLICT", "note": "幂等失效"}
+{"id": "conf-08", "message": "Idempotency-Key reused with different payload", "detail": "", "expected": "CONFLICT", "note": "幂等键复用"}
+{"id": "db-01", "message": "sqlite3.OperationalError: database is locked", "detail": "", "expected": "DATABASE", "note": "并发写锁"}
+{"id": "db-02", "message": "sqlite3.IntegrityError: UNIQUE constraint failed: users.email", "detail": "", "expected": "DATABASE", "note": "唯一约束"}
+{"id": "db-03", "message": "sqlite3.OperationalError: no such table: orders", "detail": "", "expected": "DATABASE", "note": "表未创建"}
+{"id": "db-04", "message": "sqlite3.OperationalError: disk I/O error", "detail": "", "expected": "DATABASE", "note": "磁盘异常"}
+{"id": "db-05", "message": "sqlite3.DatabaseError: file is not a database", "detail": "", "expected": "DATABASE", "note": "库文件损坏"}
+{"id": "as-01", "message": "AssertionError: assert 1 == 2", "detail": "E   assert 1 == 2", "expected": "ASSERTION", "note": "普通断言失败"}
+{"id": "as-02", "message": "AssertionError: assert 'created' == 'paid'", "detail": "E   - paid\nE   + created", "expected": "ASSERTION", "note": "状态值不符"}
+{"id": "as-03", "message": "AssertionError: assert 8 == 9", "detail": "E   stock after order: 8 != 9", "expected": "ASSERTION", "note": "库存断言"}
+{"id": "as-04", "message": "AssertionError: assert 'name' in {'id': 1}", "detail": "E   KeyError: 'name'", "expected": "ASSERTION", "note": "响应字段缺失"}
+{"id": "as-05", "message": "AssertionError: assert 1999 == 2000", "detail": "E   assert 1999 == 2000", "expected": "ASSERTION", "note": "金额差 1 分"}
+{"id": "as-06", "message": "AssertionError: assert len(items) == 10", "detail": "E   assert 7 == 10", "expected": "ASSERTION", "note": "分页数量不符"}
+{"id": "unk-01", "message": "KeyError: 'id'", "detail": "response.json()['id']\nE   KeyError: 'id'\nassert response.json()['id'] == 1", "expected": "UNKNOWN", "note": "响应结构变化"}
+{"id": "unk-02", "message": "TypeError: 'NoneType' object is not subscriptable", "detail": "assert response.json()['data']['id'] == 1", "expected": "UNKNOWN", "note": "data 为 null"}
+{"id": "unk-03", "message": "json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)", "detail": "assert response.json()['code'] == 0", "expected": "UNKNOWN", "note": "返回非 JSON"}
+{"id": "unk-04", "message": "IndexError: list index out of range", "detail": "assert items[0]['id'] == 1", "expected": "UNKNOWN", "note": "列表为空"}
+{"id": "unk-05", "message": "AttributeError: 'dict' object has no attribute 'id'", "detail": "assert data.id == 1", "expected": "UNKNOWN", "note": "对象字段访问错误"}
+{"id": "unk-06", "message": "ValueError: invalid literal for int() with base 10: 'abc'", "detail": "assert int(payload['price']) > 0", "expected": "UNKNOWN", "note": "类型转换失败"}
+{"id": "unk-07", "message": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff", "detail": "assert '名称' in response.text", "expected": "UNKNOWN", "note": "编码异常"}
+{"id": "unk-08", "message": "RecursionError: maximum recursion depth exceeded", "detail": "assert serialize(node) == expected", "expected": "UNKNOWN", "note": "序列化递归"}
