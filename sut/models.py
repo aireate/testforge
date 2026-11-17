@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import (
     DateTime,
@@ -15,6 +15,57 @@ from sut.database import Base
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def utcnow_naive() -> datetime:
+    """SQLite 不保存时区，优惠券有效期统一用 naive UTC 比较。"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(100))
+    type: Mapped[str] = mapped_column(String(10))  # fixed / percent
+    value: Mapped[int] = mapped_column(Integer)
+    min_spend_cents: Mapped[int] = mapped_column(Integer, default=0)
+    total_quantity: Mapped[int] = mapped_column(Integer, default=0)
+    claimed_quantity: Mapped[int] = mapped_column(Integer, default=0)
+    valid_from: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    valid_to: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: utcnow_naive() + timedelta(days=30)
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class UserCoupon(Base):
+    __tablename__ = "user_coupons"
+    __table_args__ = (UniqueConstraint("user_id", "coupon_id", name="uq_user_coupon"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    coupon_id: Mapped[int] = mapped_column(ForeignKey("coupons.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="unused")
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), nullable=True)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    coupon: Mapped[Coupon] = relationship(lazy="joined")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    trade_no: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="success")
+    raw_body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class User(Base):
@@ -49,8 +100,15 @@ class Order(Base):
     order_no: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     status: Mapped[str] = mapped_column(String(20), default="created")
+    subtotal_cents: Mapped[int] = mapped_column(Integer, default=0)
+    discount_cents: Mapped[int] = mapped_column(Integer, default=0)
     total_cents: Mapped[int] = mapped_column(Integer, default=0)
+    coupon_id: Mapped[int | None] = mapped_column(
+        ForeignKey("coupons.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship(back_populates="orders")

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from sut.models import Order, Product
+from sut.models import Coupon, Order, Product
 from sut.schemas import OrderItemOut, OrderOut, ProductOut
 
 
@@ -29,11 +29,15 @@ def to_order_out(db: Session, order: Order) -> OrderOut:
                 subtotal_cents=item.unit_price_cents * item.quantity,
             )
         )
+    coupon = db.get(Coupon, order.coupon_id) if order.coupon_id else None
     return OrderOut(
         id=order.id,
         order_no=order.order_no,
         user_id=order.user_id,
         status=order.status,
+        subtotal_cents=order.subtotal_cents or order.total_cents,
+        discount_cents=order.discount_cents or 0,
         total_cents=order.total_cents,
+        coupon_code=coupon.code if coupon else None,
         items=items,
     )

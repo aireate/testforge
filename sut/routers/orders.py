@@ -13,13 +13,31 @@ from sut import faults
 from sut.database import get_db
 from sut.deps import get_current_user
 from sut.errors import AppError
-from sut.models import IdempotencyRecord, Order, OrderItem, Product, User
+from sut.models import (
+    Coupon,
+    IdempotencyRecord,
+    Order,
+    OrderItem,
+    Payment,
+    Product,
+    User,
+    UserCoupon,
+    utcnow,
+    utcnow_naive,
+)
 from sut.schemas import OrderCreate, OrderOut, OrderPage
 from sut.utils import to_order_out
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
-ALLOWED_STATUS = {"created", "cancelled", "shipped", "completed"}
+ALLOWED_STATUS = {
+    "created",
+    "paid",
+    "shipped",
+    "completed",
+    "cancelled",
+    "refunded",
+}
 
 
 def _order_or_404(db: Session, order_id: int) -> Order:
@@ -45,12 +63,83 @@ def _request_hash(payload: OrderCreate) -> str:
     return sha256(raw.encode()).hexdigest()
 
 
+def _apply_coupon(
+    db: Session, user: User, code: str, order: Order, subtotal: int
+) -> int:
+    user_coupon = db.scalar(
+        select(UserCoupon)
+        .join(Coupon, UserCoupon.coupon_id == Coupon.id)
+        .where(UserCoupon.user_id == user.id, Coupon.code == code)
+    )
+    if user_coupon is None:
+        raise AppError(409, "COUPON_NOT_AVAILABLE", "未领取该优惠券")
+
+    coupon = user_coupon.coupon
+    now = utcnow_naive()
+    if now < coupon.valid_from or now > coupon.valid_to:
+        raise AppError(409, "COUPON_EXPIRED", "优惠券不在有效期内")
+
+    if user_coupon.status != "unused" and not faults.enabled("coupon_double_use"):
+        raise AppError(409, "COUPON_ALREADY_USED", "优惠券已使用")
+
+    if subtotal < coupon.min_spend_cents:
+        raise AppError(
+            409,
+            "COUPON_MIN_SPEND",
+            "未达到优惠券使用门槛",
+            {"min_spend_cents": coupon.min_spend_cents, "subtotal_cents": subtotal},
+        )
+
+    if coupon.type == "fixed":
+        discount = min(coupon.value, subtotal)
+    else:
+        discount = subtotal * coupon.value // 100
+    if faults.enabled("discount_ignored"):
+        discount = 0
+
+    user_coupon.status = "used"
+    user_coupon.order_id = order.id
+    user_coupon.used_at = utcnow()
+    order.coupon_id = coupon.id
+    return discount
+
+
+def _restore_coupon(db: Session, order: Order) -> None:
+    user_coupon = db.scalar(
+        select(UserCoupon).where(
+            UserCoupon.order_id == order.id, UserCoupon.status == "used"
+        )
+    )
+    if user_coupon is not None:
+        user_coupon.status = "unused"
+        user_coupon.order_id = None
+        user_coupon.used_at = None
+
+
+def _restore_stock(db: Session, order: Order) -> None:
+    if faults.enabled("stock_not_restored"):
+        return
+    for item in order.items:
+        db.execute(
+            update(Product)
+            .where(Product.id == item.product_id)
+            .values(stock=Product.stock + item.quantity)
+        )
+
+
 def _build_order(db: Session, user: User, payload: OrderCreate) -> Order:
-    order = Order(order_no=_new_order_no(), user_id=user.id, status="created", total_cents=0)
+    order = Order(
+        order_no=_new_order_no(),
+        user_id=user.id,
+        status="created",
+        subtotal_cents=0,
+        discount_cents=0,
+        total_cents=0,
+    )
     db.add(order)
     db.flush()
 
-    total = 0
+    subtotal = 0
     for item in payload.items:
         # 条件更新保证并发下单不会超卖
         statement = update(Product).where(Product.id == item.product_id)
@@ -77,10 +166,10 @@ def _build_order(db: Session, user: User, payload: OrderCreate) -> Order:
                 },
             )
         product = db.get(Product, item.product_id)
-        subtotal = product.price_cents * item.quantity
         if faults.enabled("total_off_by_one"):
-            subtotal -= 1
-        total += subtotal
+            subtotal += product.price_cents * item.quantity - 1
+        else:
+            subtotal += product.price_cents * item.quantity
         db.add(
             OrderItem(
                 order_id=order.id,
@@ -90,7 +179,19 @@ def _build_order(db: Session, user: User, payload: OrderCreate) -> Order:
             )
         )
 
-    order.total_cents = total
+    discount = 0
+    if payload.coupon_code:
+        try:
+            discount = _apply_coupon(
+                db, user, payload.coupon_code, order, subtotal
+            )
+        except AppError:
+            db.rollback()
+            raise
+
+    order.subtotal_cents = subtotal
+    order.discount_cents = discount
+    order.total_cents = max(0, subtotal - discount)
     db.commit()
     db.refresh(order)
     return order
@@ -220,13 +321,38 @@ def cancel_order(
             {"status": order.status},
         )
     if not faults.enabled("stock_not_restored"):
-        for item in order.items:
-            db.execute(
-                update(Product)
-                .where(Product.id == item.product_id)
-                .values(stock=Product.stock + item.quantity)
-            )
+        _restore_stock(db, order)
+    _restore_coupon(db, order)
     order.status = "cancelled"
+    db.commit()
+    db.refresh(order)
+    return to_order_out(db, order)
+
+
+@router.post("/{order_id}/refund", response_model=OrderOut)
+def refund_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> OrderOut:
+    order = _order_or_404(db, order_id)
+    if user.role != "admin":
+        raise AppError(403, "FORBIDDEN", "仅管理员可退款")
+    if order.status not in {"paid", "shipped", "completed"}:
+        raise AppError(
+            409,
+            "ORDER_STATE_INVALID",
+            f"当前订单状态不可退款: {order.status}",
+            {"status": order.status},
+        )
+    _restore_stock(db, order)
+    _restore_coupon(db, order)
+    payments = db.scalars(select(Payment).where(Payment.order_id == order.id)).all()
+    for payment in payments:
+        payment.status = "refunded"
+        payment.refunded_at = utcnow()
+    order.status = "refunded"
+    order.refunded_at = utcnow()
     db.commit()
     db.refresh(order)
     return to_order_out(db, order)
@@ -241,11 +367,11 @@ def ship_order(
     order = _order_or_404(db, order_id)
     if user.role != "admin":
         raise AppError(403, "FORBIDDEN", "仅管理员可发货")
-    if order.status != "created":
+    if order.status not in {"created", "paid"}:
         raise AppError(
             409,
             "ORDER_STATE_INVALID",
-            f"仅待处理订单可发货，当前状态: {order.status}",
+            f"仅待处理或已支付订单可发货，当前状态: {order.status}",
             {"status": order.status},
         )
     order.status = "shipped"

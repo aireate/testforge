@@ -2,10 +2,19 @@ from api.base import BaseApi
 
 
 class OrderApi(BaseApi):
-    def create(self, items: list[dict], idempotency_key: str | None = None, remark: str = ""):
+    def create(
+        self,
+        items: list[dict],
+        idempotency_key: str | None = None,
+        remark: str = "",
+        coupon_code: str | None = None,
+    ):
+        body = {"items": items, "remark": remark}
+        if coupon_code:
+            body["coupon_code"] = coupon_code
         return self.client.post(
             "/orders",
-            json_body={"items": items, "remark": remark},
+            json_body=body,
             idempotency_key=idempotency_key,
         )
 
@@ -26,3 +35,6 @@ class OrderApi(BaseApi):
 
     def complete(self, order_id: int):
         return self.client.post(f"/orders/{order_id}/complete")
+
+    def refund(self, order_id: int):
+        return self.client.post(f"/orders/{order_id}/refund")

@@ -34,6 +34,10 @@ FAULT_SPECS: tuple[FaultSpec, ...] = (
     FaultSpec("pagination_offset", "商品", "分页偏移多跳一页"),
     FaultSpec("keyword_ignored", "商品", "搜索关键字被忽略"),
     FaultSpec("delete_in_use_allowed", "商品", "允许删除已被订单引用的商品"),
+    FaultSpec("coupon_double_use", "优惠券", "同一张优惠券可重复使用"),
+    FaultSpec("discount_ignored", "优惠券", "下单时忽略优惠券折扣"),
+    FaultSpec("payment_signature_skip", "支付", "支付回调跳过签名校验"),
+    FaultSpec("payment_amount_ignore", "支付", "支付回调不校验金额"),
 )
 
 _FAULT_IDS = frozenset(spec.id for spec in FAULT_SPECS)

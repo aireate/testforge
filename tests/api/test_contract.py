@@ -116,8 +116,20 @@ class TestSchemaContract:
     def test_order_schema(self, user_client, order_factory):
         order = order_factory()
         body = OrderApi(user_client).get(order["id"]).json()
-        assert set(body) == {"id", "order_no", "user_id", "status", "total_cents", "items"}
+        assert set(body) == {
+            "id",
+            "order_no",
+            "user_id",
+            "status",
+            "subtotal_cents",
+            "discount_cents",
+            "total_cents",
+            "coupon_code",
+            "items",
+        }
         assert isinstance(body["id"], int)
+        assert isinstance(body["subtotal_cents"], int)
+        assert isinstance(body["discount_cents"], int)
         assert isinstance(body["total_cents"], int)
         for item in body["items"]:
             assert set(item) == {

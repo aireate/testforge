@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -74,9 +75,64 @@ class OrderItemIn(BaseModel):
     quantity: int = Field(gt=0, le=999)
 
 
+class CouponCreate(BaseModel):
+    code: str = Field(min_length=3, max_length=20, pattern=r"^[A-Za-z0-9]+$")
+    title: str = Field(min_length=2, max_length=100)
+    type: Literal["fixed", "percent"]
+    value: int = Field(gt=0, le=10_000_000, description="固定金额（分）或折扣百分比")
+    min_spend_cents: int = Field(default=0, ge=0, le=10_000_000)
+    total_quantity: int = Field(default=100, ge=1, le=1_000_000)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+
+    @field_validator("code")
+    @classmethod
+    def _upper_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+    @model_validator(mode="after")
+    def _check_rules(self) -> "CouponCreate":
+        if self.type == "percent" and self.value > 100:
+            raise ValueError("百分比折扣不能超过 100")
+        if self.valid_from and self.valid_to and self.valid_to <= self.valid_from:
+            raise ValueError("valid_to 必须晚于 valid_from")
+        return self
+
+
+class CouponOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    title: str
+    type: str
+    value: int
+    min_spend_cents: int
+    total_quantity: int
+    claimed_quantity: int
+    valid_from: datetime
+    valid_to: datetime
+
+
+class UserCouponOut(BaseModel):
+    id: int
+    status: str
+    order_id: int | None
+    coupon: CouponOut
+
+
 class OrderCreate(BaseModel):
     items: list[OrderItemIn] = Field(min_length=1, max_length=20)
     remark: str = Field(default="", max_length=200)
+    coupon_code: str | None = Field(default=None, max_length=20)
+
+    @field_validator("coupon_code")
+    @classmethod
+    def _normalize_coupon(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip().upper()
+        return value or None
 
     @field_validator("items")
     @classmethod
@@ -100,7 +156,10 @@ class OrderOut(BaseModel):
     order_no: str
     user_id: int
     status: str
+    subtotal_cents: int
+    discount_cents: int
     total_cents: int
+    coupon_code: str | None = None
     items: list[OrderItemOut]
 
 
@@ -110,3 +169,18 @@ class OrderPage(BaseModel):
     page: int
     size: int
     pages: int
+
+
+class PaymentCallback(BaseModel):
+    order_no: str = Field(min_length=4, max_length=40)
+    trade_no: str = Field(min_length=4, max_length=64)
+    amount_cents: int = Field(gt=0)
+    status: Literal["success", "failed"] = "success"
+    timestamp: int | None = None
+
+
+class PaymentCallbackOut(BaseModel):
+    received: bool = True
+    order_no: str
+    order_status: str
+    duplicate: bool = False

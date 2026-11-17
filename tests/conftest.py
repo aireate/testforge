@@ -208,6 +208,22 @@ def product_factory(admin_client: RequestUtil):
 
 
 @pytest.fixture
+def coupon_factory(admin_client: RequestUtil):
+    """创建优惠券；编码唯一，用例之间互不影响。"""
+    from api.coupon_api import CouponApi
+
+    coupon_api = CouponApi(admin_client)
+
+    def _create(**overrides) -> dict:
+        code = overrides.pop("code", f"CP{uuid.uuid4().hex[:8].upper()}")
+        response = coupon_api.create(code=code, **overrides)
+        assert response.status_code == 201, f"创建优惠券失败: {response.status_code} {response.text}"
+        return response.json()
+
+    return _create
+
+
+@pytest.fixture
 def order_factory(user_client: RequestUtil):
     """创建订单并在用例结束后取消（取消会归还库存）。"""
     order_api = OrderApi(user_client)

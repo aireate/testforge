@@ -44,7 +44,7 @@ pytest + requests + Playwright + Allure + Jenkins，覆盖接口、数据库落�
 | UI 自动化 | Playwright + POM，使用本机 Edge（`channel=msedge`），无需下载浏览器 |
 | 可观测性 | Allure 步骤/附件、失败请求报文、Playwright Trace、失败截图 |
 | 失败归因 | 规则引擎离线分类 9 类失败并给出排查动作，LLM 可选增强，失败自动附到 Allure |
-| 缺陷注入 | 12 类典型业务缺陷可注入，矩阵脚本统计用例检出率，验证「测试真的能发现问题」 |
+| 缺陷注入 | 16 类典型业务缺陷可注入，矩阵脚本统计用例检出率，验证「测试真的能发现问题」 |
 | CI/CD | Jenkins 并行流水线 + JUnit + Allure 归档，附 Dockerfile / compose |
 
 ---
@@ -57,7 +57,9 @@ pytest + requests + Playwright + Allure + Jenkins，覆盖接口、数据库落�
 |:--|:--|:--|
 | 鉴权 | `POST /api/v1/auth/login`、`GET /auth/me`、`POST /auth/refresh` | JWT（HS256），admin / user 两种角色 |
 | 商品 | `GET/POST /products`、`GET/PUT/DELETE /products/{id}`、`PATCH /products/{id}/stock` | 分页、关键字、分类、有货筛选、排序、库存变更 |
-| 订单 | `POST /orders`、`GET /orders`、`GET /orders/{id}`、`POST /orders/{id}/cancel|ship|complete` | 库存扣减、状态机、越权校验、幂等 |
+| 订单 | `POST /orders`、`GET /orders`、`GET /orders/{id}`、`POST /orders/{id}/cancel|ship|complete|refund` | 库存扣减、状态机、优惠券、越权校验、幂等 |
+| 优惠券 | `GET/POST /coupons`、`POST /coupons/{code}/claim`、`GET /coupons/mine` | 固定/百分比折扣、门槛、有效期、每人限领、并发不超发 |
+| 支付 | `POST /payments/callback` | HMAC-SHA256 签名、金额校验、交易号幂等、状态机 |
 | 运维 | `GET /healthz` | 服务与数据库健康检查 |
 
 演示账号：`admin / admin123`（管理员）、`user / user123`（普通用户）。种子数据为 10 件商品。
@@ -72,7 +74,7 @@ flowchart LR
         A["tests/api<br/>接口 / 契约 / 落库"]
         B["tests/ui + POM<br/>Playwright"]
     end
-    A --> C["api 服务层<br/>AuthApi / ProductApi / OrderApi"]
+        A --> C["api 服务层<br/>AuthApi / ProductApi / OrderApi / CouponApi / PaymentApi"]
     C --> D["RequestUtil<br/>Session / Token / 重试 / 日志"]
     D --> E["FastAPI SUT"]
     B --> E
@@ -99,7 +101,7 @@ pip install -r requirements.txt
 ### 2. 执行用例
 
 ```bash
-python run.py            # 全部 150 条（接口 + UI + 单测），自动启动/销毁 SUT
+python run.py            # 全部 172 条（接口 + UI + 单测），自动启动/销毁 SUT
 python run.py api        # 仅接口用例，4 进程并行
 python run.py ui         # 仅 Playwright UI 用例
 python run.py smoke      # 仅冒烟用例
@@ -145,7 +147,7 @@ python run.py eval        # 或 python tools/eval_triage.py
 python run.py faults      # 或 python tools/fault_matrix.py
 ```
 
-逐个启用 SUT 中的 12 类缺陷（超卖、幂等失效、金额算错、越权、过期 Token 等），对每一轮运行接口用例并统计是否检出，结果写入 `reports/fault_matrix.md`。这一步用于回答「用例全绿，是否真的能发现 bug」：缺陷注入后必须有用例失败，否则说明覆盖不足。
+逐个启用 SUT 中的 16 类缺陷（超卖、幂等失效、金额算错、越权、过期 Token、优惠券重复使用、支付签名跳过等），对每一轮运行接口用例并统计是否检出，结果写入 `reports/fault_matrix.md`。这一步用于回答「用例全绿，是否真的能发现 bug」：缺陷注入后必须有用例失败，否则说明覆盖不足。
 
 ---
 
@@ -156,7 +158,9 @@ testforge/
 ├── api/                      # 服务层：按业务组织请求，不做断言
 │   ├── auth_api.py
 │   ├── product_api.py
-│   └── order_api.py
+│   ├── order_api.py
+│   ├── coupon_api.py
+│   └── payment_api.py
 ├── common/
 │   ├── request_util.py       # Session / Token 注入 / 重试 / 日志 / Allure 附件
 │   ├── db_util.py            # SQLite 只读查询，用于落库断言
@@ -171,13 +175,13 @@ testforge/
 ├── sut/                      # 被测系统（FastAPI + SQLAlchemy）
 │   ├── app.py  models.py  schemas.py  security.py  seed.py
 │   ├── faults.py             # 缺陷注入开关（TESTFORGE_FAULTS）
-│   ├── routers/              # auth / products / orders
+│   ├── routers/              # auth / products / orders / coupons / payments
 │   └── static/index.html     # 管理页（带 data-testid）
 ├── tools/fault_matrix.py     # 逐个注入缺陷并统计检出率
 ├── tools/eval_triage.py      # 归因评测入口（可设准确率门槛）
 ├── tests/
 │   ├── conftest.py           # 启动 SUT、登录、工厂 fixture、失败归因附件
-│   ├── api/                  # 鉴权 / 商品 / 订单 / 契约 / 落库
+│   ├── api/                  # 鉴权 / 商品 / 订单 / 优惠券 / 支付 / 契约 / 落库
 │   ├── ui/                   # Playwright 用例 + pages（POM）
 │   └── unit/                 # 归因引擎单测（不依赖 SUT）
 ├── legacy/                   # 早期 jsonplaceholder 练习用例（不参与 testpaths）
@@ -198,10 +202,12 @@ testforge/
 | 鉴权 | 17 | 登录成功/失败、参数校验、畸形与过期 Token、刷新、载荷 |
 | 商品 | 44 | 列表分页/搜索/筛选/排序、详情、创建/更新/删除、权限、库存边界 |
 | 订单 | 37 | 下单、金额、库存不足、状态机、越权、幂等重放与冲突、并发不超卖 |
+| 优惠券 | 13 | 创建、领取、重复领取、领完、过期、门槛、折扣计算、取消归还 |
+| 支付与退款 | 9 | 回调签名、金额校验、交易号幂等、支付状态、退款与库存/优惠券归还 |
 | 契约 | 14 | 统一错误结构、响应字段类型、健康检查、注入与超长参数 |
 | 落库一致性 | 8 | 订单/明细/库存三方一致、幂等记录、密码哈希、外键完整性 |
 | UI（Playwright） | 10 | 登录、错误提示、列表渲染、搜索、新增、删除、退出、权限视图 |
-| **合计** | **130** | 接口 120 + UI 10 |
+| **合计** | **172** | 接口 142 + UI 10 + 单测 20 |
 
 另有 20 条单测（`tests/unit`），不依赖 SUT，覆盖 9 类失败分类、JUnit 解析、Markdown 报告、评测指标与 LLM 未配置降级。
 
@@ -259,16 +265,16 @@ Windows 11 / Python 3.13 / Edge：
 
 ```
 # 接口用例，4 进程并行
-120 passed in 10.60s
+142 passed in 8.80s
 
 # 全量（接口 + UI + 单测）
-150 passed in 19.17s
+172 passed in 17.11s
 
 # 归因评测
 60 条样本，准确率 86.7%（52/60），宏平均 F1 0.844
 
 # 缺陷注入矩阵
-检出 12/12（100%），每轮注入触发 1–4 个用例失败
+检出 16/16（100%），每轮注入触发 1–6 个用例失败
 ```
 
 ---
@@ -276,7 +282,7 @@ Windows 11 / Python 3.13 / Edge：
 ## 已知边界
 
 - SUT 为演示用途，SQLite 单文件写入，未做分库分表与缓存；
-- 缺陷注入的 12 类缺陷围绕现有需求设计，因此全部检出；限流、弱网、性能退化等场景尚未覆盖，这也是后续迭代方向；
+- 缺陷注入的 16 类缺陷围绕现有需求设计，因此全部检出；限流、弱网、性能退化等场景尚未覆盖，这也是后续迭代方向；
 - UI 用例默认使用本机 Edge；纯 Chromium 环境（如 CI 的 Playwright 镜像）设置 `TESTFORGE_BROWSER_CHANNEL=bundled` 即可使用镜像自带浏览器；
 - `legacy/` 保留早期 jsonplaceholder 练习用例，不在 `testpaths` 内，不参与 CI。
 

@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sut import __version__
 from sut.database import engine, init_db
 from sut.errors import register_error_handlers
-from sut.routers import auth, orders, products
+from sut.routers import auth, coupons, orders, payments, products
 from sut.seed import seed_if_empty
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -35,6 +35,8 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(products.router, prefix=API_PREFIX)
     app.include_router(orders.router, prefix=API_PREFIX)
+    app.include_router(coupons.router, prefix=API_PREFIX)
+    app.include_router(payments.router, prefix=API_PREFIX)
 
     @app.get("/healthz", tags=["ops"])
     def healthz() -> dict:
