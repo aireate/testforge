@@ -2,31 +2,66 @@ pipeline {
     agent any
 
     options {
-        skipDefaultCheckout false
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        disableConcurrentBuilds()
+    }
+
+    triggers {
+        // 每 15 分钟轮询一次代码变更；如需定时回归可再加 cron('H 2 * * *')
+        pollSCM('H/15 * * * *')
     }
 
     environment {
         PYTHONIOENCODING = 'UTF-8'
+        TESTFORGE_JWT_SECRET = 'jenkins-pipeline-secret-0123456789abcdef'
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
+        stage('Test') {
+            failFast true
+            parallel {
+                stage('接口测试') {
+                    agent {
+                        docker {
+                            image 'python:3.11-slim'
+                            args '-u root'
+                        }
+                    }
+                    steps {
+                        sh 'pip install --no-cache-dir -r requirements.txt'
+                        sh 'python -m compileall -q sut common api config tests'
+                        sh 'python -m pytest -m "not ui" -n 4 --alluredir=allure-results/api --junitxml=reports/api.xml'
+                    }
+                }
 
-        stage('Install Dependencies') {
-            steps {
-                bat 'pip install -r requirements.txt'
-            }
-        }
+                stage('UI 测试') {
+                    agent {
+                        docker {
+                            // 镜像内置 Chromium 与系统依赖，UI 用例使用 bundled 浏览器
+                            image 'mcr.microsoft.com/playwright/python:v1.49.0-jammy'
+                            args '-u root'
+                        }
+                    }
+                    steps {
+                        sh 'pip install --no-cache-dir -r requirements.txt'
+                        withEnv(['TESTFORGE_BROWSER_CHANNEL=bundled']) {
+                            sh 'python -m pytest -m ui --alluredir=allure-results/ui --junitxml=reports/ui.xml'
+                        }
+                    }
+                }
 
-        stage('Run Tests') {
-            steps {
-                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                    bat 'pytest --alluredir=allure-results'
+                stage('冒烟测试') {
+                    agent {
+                        docker {
+                            image 'python:3.11-slim'
+                            args '-u root'
+                        }
+                    }
+                    steps {
+                        sh 'pip install --no-cache-dir -r requirements.txt'
+                        sh 'python -m pytest -m smoke --alluredir=allure-results/smoke --junitxml=reports/smoke.xml'
+                    }
                 }
             }
         }
@@ -34,16 +69,22 @@ pipeline {
 
     post {
         always {
-            allure includeProperties: false, jdk: '', results: [[path: 'allure-results']]
+            junit allowEmptyResults: true, testResults: 'reports/*.xml'
+            archiveArtifacts artifacts: 'reports/*.xml', allowEmptyArchive: true
+            allure includeProperties: false, jdk: '', results: [
+                [path: 'allure-results/api'],
+                [path: 'allure-results/ui'],
+                [path: 'allure-results/smoke']
+            ]
         }
         success {
-            echo '✅ All tests passed!'
+            echo '全部测试通过，Allure 报告已归档。'
         }
         unstable {
-            echo '⚠️ Some tests failed, please check the Allure report.'
+            echo '存在失败用例，请查看 Allure 报告与 JUnit 结果。'
         }
         failure {
-            echo '❌ Pipeline failed.'
+            echo '流水线执行失败。'
         }
     }
 }

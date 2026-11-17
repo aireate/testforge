@@ -1,0 +1,12 @@
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+.pytest_cache/
+allure-results/
+allure-report/
+reports/
+logs/
+data/
+legacy/
+*.zip

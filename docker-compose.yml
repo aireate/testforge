@@ -1,0 +1,35 @@
+services:
+  sut:
+    build: .
+    image: testforge-sut:latest
+    environment:
+      TESTFORGE_SEED: "1"
+      TESTFORGE_JWT_SECRET: "testforge-compose-secret-0123456789"
+    ports:
+      - "8000:8000"
+    volumes:
+      - sut-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+  tests:
+    build: .
+    image: testforge-sut:latest
+    depends_on:
+      sut:
+        condition: service_healthy
+    environment:
+      TESTFORGE_EXTERNAL_SUT: "1"
+      TESTFORGE_BASE_URL: "http://sut:8000"
+      TESTFORGE_DB: "/app/data/testforge.db"
+    volumes:
+      - sut-data:/app/data:ro
+      - ./allure-results:/app/allure-results
+    command: ["python", "-m", "pytest", "-m", "not ui", "--alluredir=/app/allure-results"]
+
+volumes:
+  sut-data:
