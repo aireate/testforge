@@ -63,6 +63,20 @@ pipeline {
                         sh 'python -m pytest -m smoke --alluredir=allure-results/smoke --junitxml=reports/smoke.xml'
                     }
                 }
+
+                stage('AI 归因评测') {
+                    agent {
+                        docker {
+                            image 'python:3.11-slim'
+                            args '-u root'
+                        }
+                    }
+                    steps {
+                        sh 'pip install --no-cache-dir -r requirements.txt'
+                        // 准确率低于 80% 时返回非 0，阻止劣化合入
+                        sh 'python tools/eval_triage.py --min-accuracy 0.8 --out reports/triage_eval.md'
+                    }
+                }
             }
         }
     }
@@ -70,7 +84,7 @@ pipeline {
     post {
         always {
             junit allowEmptyResults: true, testResults: 'reports/*.xml'
-            archiveArtifacts artifacts: 'reports/*.xml', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'reports/*.xml, reports/triage_eval.md', allowEmptyArchive: true
             allure includeProperties: false, jdk: '', results: [
                 [path: 'allure-results/api'],
                 [path: 'allure-results/ui'],
